@@ -1,0 +1,239 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MAX_ROOMS 50
+#define NAME_LEN 50
+#define PHONE_LEN 15
+#define LINE_BUF 128
+
+struct Booking {
+    int roomNumber;
+    char customerName[NAME_LEN];
+    char phoneNumber[PHONE_LEN];
+    int days;
+    float ratePerDay;
+    float totalBill;
+};
+
+struct Booking bookings[MAX_ROOMS];
+int bookingCount = 0;
+
+/* Utility input functions */
+void readLine(char *buf, int size) {
+    if (fgets(buf, size, stdin) == NULL) {
+        buf[0] = '\0';
+        return;
+    }
+    size_t ln = strlen(buf);
+    if (ln > 0 && buf[ln - 1] == '\n') buf[ln - 1] = '\0';
+}
+
+/* Check trailing characters after strtol/strtod */
+int hasOnlySpaces(const char *s) {
+    while (*s) {
+        if (!isspace((unsigned char)*s)) return 0;
+        s++;
+    }
+    return 1;
+}
+
+int readIntInRange(const char *prompt, int min, int max) {
+    char buf[LINE_BUF];
+    long val;
+    char *endptr;
+    while (1) {
+        printf("%s", prompt);
+        readLine(buf, sizeof(buf));
+        if (buf[0] == '\0') { printf("Input cannot be empty. Try again.\n"); continue; }
+        val = strtol(buf, &endptr, 10);
+        if (endptr == buf || !hasOnlySpaces(endptr)) {
+            printf("Invalid integer input. Please enter numeric digits only.\n");
+            continue;
+        }
+        if (val < min || val > max) {
+            printf("Value must be between %d and %d. Try again.\n", min, max);
+            continue;
+        }
+        return (int)val;
+    }
+}
+
+int readPositiveInt(const char *prompt) {
+    char buf[LINE_BUF];
+    long val;
+    char *endptr;
+    while (1) {
+        printf("%s", prompt);
+        readLine(buf, sizeof(buf));
+        if (buf[0] == '\0') { printf("Input cannot be empty. Try again.\n"); continue; }
+        val = strtol(buf, &endptr, 10);
+        if (endptr == buf || !hasOnlySpaces(endptr) || val <= 0) {
+            printf("Please enter a positive integer value.\n");
+            continue;
+        }
+        return (int)val;
+    }
+}
+
+float readPositiveFloat(const char *prompt) {
+    char buf[LINE_BUF];
+    double val;
+    char *endptr;
+    while (1) {
+        printf("%s", prompt);
+        readLine(buf, sizeof(buf));
+        if (buf[0] == '\0') { printf("Input cannot be empty. Try again.\n"); continue; }
+        val = strtod(buf, &endptr);
+        if (endptr == buf || !hasOnlySpaces(endptr) || val <= 0.0) {
+            printf("Please enter a positive number (e.g., 250.50).\n");
+            continue;
+        }
+        return (float)val;
+    }
+}
+
+void readPhoneNumber(char *out, int maxLen) {
+    char buf[LINE_BUF];
+    while (1) {
+        printf("Enter Phone Number (digits only, max 11 digits): ");
+        readLine(buf, sizeof(buf));
+        size_t len = strlen(buf);
+        if (len == 0) { printf("Phone number cannot be empty. Try again.\n"); continue; }
+        if (len > 11) { printf("Invalid: phone number exceeds 11 digits. Try again.\n"); continue; }
+        int ok = 1;
+        for (size_t i = 0; i < len; ++i) {
+            if (!isdigit((unsigned char)buf[i])) { ok = 0; break; }
+        }
+        if (!ok) { printf("Phone number must contain digits only. Try again.\n"); continue; }
+        /* copy safe */
+        strncpy(out, buf, maxLen - 1);
+        out[maxLen - 1] = '\0';
+        return;
+    }
+}
+
+/* Booking functions */
+int findBookingByRoom(int roomNumber) {
+    for (int i = 0; i < bookingCount; i++) {
+        if (bookings[i].roomNumber == roomNumber) return i;
+    }
+    return -1;
+}
+
+void bookRoom() {
+    if (bookingCount >= MAX_ROOMS) {
+        printf("No rooms available!\n");
+        return;
+    }
+
+    struct Booking b;
+    b.roomNumber = readIntInRange("Enter Room Number (1-50): ", 1, MAX_ROOMS);
+
+    if (findBookingByRoom(b.roomNumber) != -1) {
+        printf("Room already booked!\n");
+        return;
+    }
+
+    printf("Enter Customer Name: ");
+    readLine(b.customerName, sizeof(b.customerName));
+    while (strlen(b.customerName) == 0) {
+        printf("Customer name cannot be empty. Enter Customer Name: ");
+        readLine(b.customerName, sizeof(b.customerName));
+    }
+
+    readPhoneNumber(b.phoneNumber, sizeof(b.phoneNumber));
+
+    b.days = readPositiveInt("Enter Number of Days (positive integer): ");
+
+    b.ratePerDay = readPositiveFloat("Enter Rate Per Day (positive number): ");
+
+    b.totalBill = b.days * b.ratePerDay;
+
+    bookings[bookingCount++] = b;
+    printf("Room booked successfully! Room: %d, Customer: %s\n", b.roomNumber, b.customerName);
+}
+
+void viewBookings() {
+    if (bookingCount == 0) {
+        printf("\nNo current bookings.\n");
+        return;
+    }
+
+    printf("\n%-10s %-25s %-15s %-5s %-10s %-10s\n", "Room No", "Customer Name", "Phone", "Days", "Rate/Day", "Total");
+    printf("--------------------------------------------------------------------------------\n");
+
+    for (int i = 0; i < bookingCount; i++) {
+        printf("%-10d %-25s %-15s %-5d %-10.2f %-10.2f\n",
+               bookings[i].roomNumber,
+               bookings[i].customerName,
+               bookings[i].phoneNumber,
+               bookings[i].days,
+               bookings[i].ratePerDay,
+               bookings[i].totalBill);
+    }
+}
+
+void cancelBooking() {
+    int room = readIntInRange("\nEnter Room Number to cancel (1-50): ", 1, MAX_ROOMS);
+
+    int index = findBookingByRoom(room);
+    if (index == -1) {
+        printf("Booking not found!\n");
+        return;
+    }
+
+    for (int i = index; i < bookingCount - 1; i++) {
+        bookings[i] = bookings[i + 1];
+    }
+    bookingCount--;
+    printf("Booking canceled successfully for room %d.\n", room);
+}
+
+void generateBill() {
+    int room = readIntInRange("\nEnter Room Number to generate bill (1-50): ", 1, MAX_ROOMS);
+
+    int index = findBookingByRoom(room);
+    if (index == -1) {
+        printf("Booking not found!\n");
+        return;
+    }
+
+    printf("\n===== BILL =====\n");
+    printf("Customer Name : %s\n", bookings[index].customerName);
+    printf("Room Number   : %d\n", bookings[index].roomNumber);
+    printf("Phone Number  : %s\n", bookings[index].phoneNumber);
+    printf("Days Stayed   : %d\n", bookings[index].days);
+    printf("Rate Per Day  : %.2f\n", bookings[index].ratePerDay);
+    printf("Total Bill    : %.2f\n", bookings[index].totalBill);
+    printf("================\n");
+}
+
+int main() {
+    char line[LINE_BUF];
+    while (1) {
+        printf("\n===== HOTEL MANAGEMENT SYSTEM =====\n");
+        printf("1. Book a Room\n");
+        printf("2. View All Bookings\n");
+        printf("3. Cancel a Booking\n");
+        printf("4. Generate Bill for a Booking\n");
+        printf("5. Exit\n");
+        printf("===================================\n");
+        int choice = readIntInRange("Enter your choice (1-5): ", 1, 5);
+
+        switch (choice) {
+            case 1: bookRoom(); break;
+            case 2: viewBookings(); break;
+            case 3: cancelBooking(); break;
+            case 4: generateBill(); break;
+            case 5:
+                printf("Exiting program. Goodbye!\n");
+                return 0;
+            default:
+                /* won't reach due to validation in readIntInRange */
+                printf("Invalid choice! Try again.\n");
+        }
+    }
+    return 0;
+}
